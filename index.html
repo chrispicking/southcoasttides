@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>South Coast Tides – Wellington</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,300;9..144,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #07111f;
+    --surface: rgba(255,255,255,0.04);
+    --border:  rgba(255,255,255,0.07);
+    --accent:  #38bdf8;
+    --accent2: #6ee7b7;
+    --text:    #e2eaf4;
+    --muted:   #5d8aa8;
+    --dim:     #2d4d63;
+    --high-col:#6ee7b7;
+    --low-col: #38bdf8;
+    --now-col: #fcd34d;
+  }
+  html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; overflow:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(ellipse 100% 55% at 50% 110%, rgba(56,189,248,0.10) 0%, transparent 65%),
+      radial-gradient(ellipse 60% 40% at 10% 90%,  rgba(110,231,183,0.06) 0%, transparent 55%);
+  }
+  body::after {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:repeating-linear-gradient(180deg, transparent 44px, rgba(56,189,248,0.025) 44px, rgba(56,189,248,0.025) 45px, transparent 45px);
+  }
+  .dash {
+    position:relative; z-index:1; width:100vw; height:100vh;
+    display:grid; grid-template-rows:auto auto auto 1fr auto;
+    padding:32px 48px 24px; gap:0;
+  }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:22px; border-bottom:1px solid var(--border); margin-bottom:20px; }
+  .brand { display:flex; flex-direction:column; gap:5px; }
+  .location-tag { font-size:10px; letter-spacing:0.22em; text-transform:uppercase; color:var(--accent); }
+  .dash-title { font-family:'Fraunces',serif; font-size:40px; font-weight:300; color:var(--text); line-height:1; }
+  .dash-title .acc { color:var(--accent2); }
+  .beaches { display:flex; gap:8px; margin-top:6px; }
+  .btag { font-size:9px; padding:2px 9px; border-radius:20px; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent); border:1px solid rgba(56,189,248,0.25); background:rgba(56,189,248,0.07); }
+  .clock-block { text-align:right; }
+  .clock { font-family:'Fraunces',serif; font-size:50px; font-weight:300; color:var(--text); line-height:1; }
+  .clock-date { font-size:12px; color:var(--muted); margin-top:5px; letter-spacing:0.06em; }
+  .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:5px; }
+  .card-label { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--dim); display:flex; align-items:center; gap:7px; }
+  .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .d-high { background:var(--high-col); box-shadow:0 0 6px rgba(110,231,183,0.55); }
+  .d-low  { background:var(--low-col);  box-shadow:0 0 6px rgba(56,189,248,0.55); }
+  .d-now  { background:var(--now-col);  box-shadow:0 0 6px rgba(252,211,77,0.55); }
+  .card-time { font-family:'Fraunces',serif; font-size:28px; font-weight:300; color:var(--text); line-height:1.15; }
+  .card-ht  { font-size:14px; color:var(--muted); }
+  .card-sub { font-size:11px; color:var(--dim); }
+  .current-bar { display:flex; align-items:center; gap:20px; background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.28); border-radius:12px; padding:12px 22px; margin-bottom:14px; }
+  .badge { display:inline-flex; align-items:center; font-size:12px; padding:5px 16px; border-radius:20px; letter-spacing:0.06em; }
+  .b-rise { background:rgba(110,231,183,0.13); color:var(--high-col); border:1px solid rgba(110,231,183,0.3); }
+  .b-fall { background:rgba(56,189,248,0.12);  color:var(--low-col);  border:1px solid rgba(56,189,248,0.28); }
+  .chart-section { display:flex; flex-direction:column; min-height:0; }
+  .chart-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .chart-lbl { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--dim); }
+  .legend { display:flex; gap:18px; font-size:10px; color:var(--muted); align-items:center; }
+  .leg { display:flex; align-items:center; gap:6px; }
+  .chart-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 22px 14px; flex:1; min-height:0; }
+  .chart-inner { position:relative; width:100%; height:100%; min-height:140px; }
+  .footer { display:flex; justify-content:space-between; align-items:center; padding-top:14px; border-top:1px solid var(--border); margin-top:14px; }
+  .footer-note { font-size:10px; color:var(--dim); }
+  .live { display:flex; align-items:center; gap:7px; font-size:10px; color:var(--accent); letter-spacing:0.12em; text-transform:uppercase; }
+  .live-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); animation:pulse 2.5s ease-in-out infinite; }
+  .splash { display:flex; align-items:center; justify-content:center; height:100%; color:var(--dim); font-size:13px; letter-spacing:0.15em; }
+  .err { color:#f87171; font-size:13px; text-align:center; padding:60px 40px; line-height:2; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .fi { animation:fi 0.6s ease both; opacity:0; }
+  @keyframes fi { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  .fi:nth-child(1){animation-delay:0.05s}.fi:nth-child(2){animation-delay:0.12s}
+  .fi:nth-child(3){animation-delay:0.19s}.fi:nth-child(4){animation-delay:0.26s}
+</style>
+</head>
+<body>
+<div class="dash" id="dash"><div class="splash">LOADING TIDE DATA…</div></div>
+
+<script>
+/*
+  Fetches official LINZ Wellington tide predictions CSV (free, no API key).
+  Wellington is the standard port; south coast beaches (Lyall Bay, Island Bay,
+  Owhiro Bay) use the same times with a negligible offset per LINZ secondary port tables.
+  We apply a small amplitude scale (0.92) as the open-coast range is slightly less.
+*/
+const CSV_URL   = 'https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Wellington%202026.csv';
+const AMP       = 0.92;  // south coast amplitude vs harbour
+
+const fmt12   = d => d.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit',hour12:true});
+const fmtDate = d => d.toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+function cdStr(t, now) {
+  const diff = t - now;
+  if (diff < 0) return 'passed';
+  const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000);
+  const suffix = t.toDateString() !== now.toDateString() ? ' (tomorrow)' : '';
+  return (h > 0 ? `in ${h}h ${m}m` : `in ${m}m`) + suffix;
+}
+function tlabel(e, now) {
+  return e.time.toDateString() === now.toDateString() ? 'earlier today' : 'last night';
+}
+
+/* ── Parse LINZ CSV ──
+   Each row: day, month, year, time1, ht1, time2, ht2 [, time3, ht3 [, time4, ht4]]
+   Times are 24hr HHMM strings, already NZ-local (DST adjusted by LINZ).
+   Higher value = high tide, lower = low tide (compare neighbours).            */
+function parseCSV(text) {
+  const extremes = [];
+  for (const raw of text.trim().split('\n')) {
+    const c = raw.split(',').map(s => s.trim());
+    if (c.length < 5) continue;
+    const day = +c[0], mon = +c[1], yr = +c[2];
+    if (!day || !mon || !yr) continue;
+
+    const tides = [];
+    for (let i = 3; i + 1 < c.length; i += 2) {
+      if (!c[i]) break;
+      const hhmm = c[i].padStart(4,'0');
+      const hh = +hhmm.slice(0,2), mm = +hhmm.slice(2,4);
+      const ht = parseFloat(c[i+1]);
+      if (isNaN(hh) || isNaN(ht)) break;
+      // Construct as local time string — correct when browser is in NZ timezone.
+      // If not in NZ timezone the times will be slightly off but still usable.
+      const iso = `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`;
+      tides.push({ time: new Date(iso), height: ht * AMP });
+    }
+    if (tides.length < 2) continue;
+    tides.sort((a,b) => a.time - b.time);
+
+    for (let i = 0; i < tides.length; i++) {
+      const p = tides[i-1], c2 = tides[i], n = tides[i+1];
+      let type = null;
+      if (!p && n)       type = c2.height > n.height  ? 'high' : 'low';
+      else if (p && !n)  type = c2.height > p.height  ? 'high' : 'low';
+      else if (p && n)   type = c2.height > p.height && c2.height > n.height ? 'high'
+                              : c2.height < p.height && c2.height < n.height ? 'low' : null;
+      if (type) extremes.push({ time: c2.time, height: +c2.height.toFixed(2), type });
+    }
+  }
+  return extremes.sort((a,b) => a.time - b.time);
+}
+
+/* Cosine interpolation between tide extremes → smooth height curve */
+function buildCurve(extremes, start, end) {
+  const pts = [];
+  const pool = extremes.filter(e => e.time >= new Date(start - 8*3600000) && e.time <= new Date(+end + 8*3600000));
+  for (let t = +start; t <= +end; t += 10*60*1000) {
+    let prev = null, next = null;
+    for (const e of pool) {
+      if (+e.time <= t) prev = e;
+      else if (!next)   next = e;
+    }
+    let h;
+    if (!prev && !next) h = 0.9;
+    else if (!prev) h = next.height;
+    else if (!next) h = prev.height;
+    else {
+      const span = +next.time - +prev.time;
+      const pos  = (t - +prev.time) / span;
+      h = prev.height + (next.height - prev.height) * (1 - Math.cos(Math.PI * pos)) / 2;
+    }
+    pts.push({ t: new Date(t), h: +h.toFixed(2) });
+  }
+  return pts;
+}
+
+let chart = null;
+
+function render(extremes) {
+  const now   = new Date();
+  const past  = extremes.filter(e => e.time <= now);
+  const future= extremes.filter(e => e.time >  now);
+  const lHigh = [...past].reverse().find(e => e.type === 'high');
+  const lLow  = [...past].reverse().find(e => e.type === 'low');
+  const next  = future[0];
+  const after = future[1];
+  const rising= next ? next.type === 'high' : false;
+
+  const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
+  const dayEnd   = new Date(now); dayEnd.setHours(23,59,59,0);
+  const curve    = buildCurve(extremes, dayStart, dayEnd);
+  const nowIdx   = Math.min(Math.round((now - dayStart) / 600000), curve.length - 1);
+  const curH     = curve[nowIdx]?.h ?? 0.9;
+
+  const card = (lbl, dot, time, ht, sub) => `
+    <div class="card fi">
+      <div class="card-label"><span class="dot ${dot}"></span>${lbl}</div>
+      <div class="card-time">${time}</div>
+      <div class="card-ht">${ht}</div>
+      <div class="card-sub">${sub}</div>
+    </div>`;
+  const empty = (lbl, dot) => `
+    <div class="card fi">
+      <div class="card-label"><span class="dot ${dot}"></span>${lbl}</div>
+      <div class="card-time" style="color:var(--dim)">—</div>
+    </div>`;
+
+  document.getElementById('dash').innerHTML = `
+    <div class="header">
+      <div class="brand">
+        <div class="location-tag">Wellington South Coast · Cook Strait</div>
+        <div class="dash-title">South Coast <span class="acc">Tides</span></div>
+        <div class="beaches">
+          <span class="btag">Lyall Bay</span><span class="btag">Island Bay</span>
+          <span class="btag">Owhiro Bay</span><span class="btag">Houghton Bay</span>
+        </div>
+      </div>
+      <div class="clock-block">
+        <div class="clock" id="clk">${fmt12(now)}</div>
+        <div class="clock-date" id="cdt">${fmtDate(now)}</div>
+      </div>
+    </div>
+
+    <div class="cards">
+      ${lHigh ? card('Last high tide','d-high',fmt12(lHigh.time),lHigh.height.toFixed(2)+' m',tlabel(lHigh,now)) : empty('Last high tide','d-high')}
+      ${lLow  ? card('Last low tide', 'd-low', fmt12(lLow.time), lLow.height.toFixed(2)+' m', tlabel(lLow,now))  : empty('Last low tide','d-low')}
+      ${next  ? card(`Next ${next.type} tide`,  next.type==='high'?'d-high':'d-low',  fmt12(next.time),  next.height.toFixed(2)+' m',  cdStr(next.time,now))  : empty('Next tide','d-now')}
+      ${after ? card(`Then ${after.type} tide`, after.type==='high'?'d-high':'d-low', fmt12(after.time), after.height.toFixed(2)+' m', cdStr(after.time,now)) : empty('Then','d-now')}
+    </div>
+
+    <div class="current-bar">
+      <div>
+        <div class="card-label"><span class="dot d-now"></span>Current level</div>
+        <div class="card-time" style="font-size:32px">${curH.toFixed(2)} m</div>
+      </div>
+      <span class="badge ${rising?'b-rise':'b-fall'}">${rising?'↑ Rising':'↓ Falling'}</span>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-hdr">
+        <div class="chart-lbl">Today's tide curve — south coast</div>
+        <div class="legend">
+          <span class="leg"><span style="width:14px;height:2px;background:#6ee7b7;display:inline-block;border-radius:1px"></span>Height</span>
+          <span class="leg"><span style="width:14px;border-top:2px dashed #fcd34d;display:inline-block"></span>Now</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><div class="chart-inner">
+        <canvas id="tc" role="img" aria-label="Wellington south coast tide height chart">Tide heights for Lyall Bay, Island Bay, Owhiro Bay today.</canvas>
+      </div></div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-note">Official LINZ Wellington data · South coast approx. · Not for navigation</div>
+      <div class="live"><span class="live-dot"></span>Live</div>
+    </div>`;
+
+  // Chart
+  const hs = curve.map(p => p.h);
+  const tl = curve.map(p => {
+    if (p.t.getMinutes() !== 0) return '';
+    const h = p.t.getHours();
+    return h===0?'12am':h===12?'12pm':h<12?`${h}am`:`${h-12}pm`;
+  });
+  const yMax = +(Math.max(...hs, 1.3) * 1.12).toFixed(1);
+
+  if (chart) { chart.destroy(); chart = null; }
+  chart = new Chart(document.getElementById('tc').getContext('2d'), {
+    type:'line',
+    data:{ labels:tl, datasets:[{ data:hs, borderColor:'#6ee7b7', borderWidth:2, backgroundColor:'rgba(110,231,183,0.08)', fill:true, tension:0.4, pointRadius:0 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{duration:800},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{
+        x:{ ticks:{color:'#2d4d63',font:{family:"'DM Mono',monospace",size:10},maxRotation:0,autoSkip:false,maxTicksLimit:25}, grid:{color:'rgba(255,255,255,0.03)'}, border:{color:'rgba(255,255,255,0.03)'} },
+        y:{ min:0, max:yMax, ticks:{color:'#2d4d63',font:{family:"'DM Mono',monospace",size:10},callback:v=>v.toFixed(1)+'m',stepSize:0.3}, grid:{color:'rgba(255,255,255,0.03)'}, border:{color:'rgba(255,255,255,0.03)'} }
+      }
+    },
+    plugins:[{ id:'nl', afterDraw(ch){
+      const {ctx,chartArea:ca,scales:s}=ch, x=s.x.getPixelForValue(nowIdx);
+      if(x<ca.left||x>ca.right) return;
+      ctx.save(); ctx.strokeStyle='#fcd34d'; ctx.lineWidth=1.5; ctx.setLineDash([4,5]); ctx.globalAlpha=0.7;
+      ctx.beginPath(); ctx.moveTo(x,ca.top); ctx.lineTo(x,ca.bottom); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha=0.9; ctx.fillStyle='#fcd34d'; ctx.font="10px 'DM Mono',monospace";
+      ctx.fillText('now',x+4,ca.top+13); ctx.restore();
+    }}]
+  });
+
+  setInterval(()=>{
+    const n=new Date();
+    const c=document.getElementById('clk'),d=document.getElementById('cdt');
+    if(c)c.textContent=fmt12(n); if(d)d.textContent=fmtDate(n);
+  },1000);
+}
+
+async function init() {
+  try {
+    const res = await fetch(CSV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status} from LINZ`);
+    const text = await res.text();
+    const extremes = parseCSV(text);
+    if (!extremes.length) throw new Error('CSV parsed but no tides found');
+    render(extremes);
+    setInterval(() => render(extremes), 5*60*1000);
+  } catch(e) {
+    document.getElementById('dash').innerHTML = `<div class="err">
+      Could not load LINZ tide data.<br>
+      <small>${e.message}</small><br><br>
+      This page must be hosted on a web server (e.g. GitHub Pages)<br>
+      so it can fetch the LINZ CSV — it won't work opened as a local file.
+    </div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
