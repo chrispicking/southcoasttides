@@ -93,8 +93,7 @@
   Owhiro Bay) use the same times with a negligible offset per LINZ secondary port tables.
   We apply a small amplitude scale (0.92) as the open-coast range is slightly less.
 */
-//const CSV_URL   = 'https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Wellington%202026.csv';
-const CSV_URL = 'Wellington_2026.csv';
+const CSV_URL   = 'https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Wellington%202026.csv';
 const AMP       = 0.92;  // south coast amplitude vs harbour
 
 const fmt12   = d => d.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit',hour12:true});
@@ -112,27 +111,31 @@ function tlabel(e, now) {
 }
 
 /* ── Parse LINZ CSV ──
-   Each row: day, month, year, time1, ht1, time2, ht2 [, time3, ht3 [, time4, ht4]]
-   Times are 24hr HHMM strings, already NZ-local (DST adjusted by LINZ).
+   Actual format (4 header rows, then data):
+   dayNum, dayName, month, year, time1, ht1, time2, ht2 [, time3, ht3 [, time4, ht4]]
+   Times are HH:MM 24hr strings, already NZ-local (DST adjusted by LINZ).
    Higher value = high tide, lower = low tide (compare neighbours).            */
 function parseCSV(text) {
   const extremes = [];
   for (const raw of text.trim().split('\n')) {
     const c = raw.split(',').map(s => s.trim());
-    if (c.length < 5) continue;
-    const day = +c[0], mon = +c[1], yr = +c[2];
-    if (!day || !mon || !yr) continue;
+    // Data rows start with a day number (1-31) in column 0
+    const dayNum = +c[0];
+    if (!dayNum || dayNum < 1 || dayNum > 31) continue;
+    // columns: 0=dayNum, 1=dayName, 2=month, 3=year, 4=time1, 5=ht1, ...
+    if (c.length < 6) continue;
+    const mon = +c[2], yr = +c[3];
+    if (!mon || !yr) continue;
 
     const tides = [];
-    for (let i = 3; i + 1 < c.length; i += 2) {
-      if (!c[i]) break;
-      const hhmm = c[i].padStart(4,'0');
-      const hh = +hhmm.slice(0,2), mm = +hhmm.slice(2,4);
+    for (let i = 4; i + 1 < c.length; i += 2) {
+      if (!c[i] || !c[i+1]) break;
+      const parts = c[i].split(':');
+      if (parts.length !== 2) break;
+      const hh = +parts[0], mm = +parts[1];
       const ht = parseFloat(c[i+1]);
-      if (isNaN(hh) || isNaN(ht)) break;
-      // Construct as local time string — correct when browser is in NZ timezone.
-      // If not in NZ timezone the times will be slightly off but still usable.
-      const iso = `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`;
+      if (isNaN(hh) || isNaN(mm) || isNaN(ht)) break;
+      const iso = `${yr}-${String(mon).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`;
       tides.push({ time: new Date(iso), height: ht * AMP });
     }
     if (tides.length < 2) continue;
